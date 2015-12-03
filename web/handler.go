@@ -30,6 +30,7 @@ func ComposeMiddleware(middleware ...interface{}) func(interface{}) Handler {
 	if middleware == nil || len(middleware) == 0 {
 		return convertHandler
 	}
+	// convert before returning to fail early at ComposeMiddleware call
 	adapters := make([]func(Handler) Handler, len(middleware))
 	for i := 0; i < len(middleware); i++ {
 		if middleware[i] == nil {
