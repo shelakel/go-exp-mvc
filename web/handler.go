@@ -32,6 +32,9 @@ func ComposeMiddleware(middleware ...interface{}) func(interface{}) Handler {
 	}
 	adapters := make([]func(Handler) Handler, len(middleware))
 	for i := 0; i < len(middleware); i++ {
+		if middleware[i] == nil {
+			panic(fmt.Sprintf("Middleware of type '%v' at index %d is nil.", reflect.TypeOf(middleware[i]), i))
+		}
 		adapters[i] = convertMiddleware(middleware, i)
 	}
 	return func(v interface{}) Handler {
@@ -44,11 +47,7 @@ func ComposeMiddleware(middleware ...interface{}) func(interface{}) Handler {
 }
 
 func convertMiddleware(middleware []interface{}, i int) func(Handler) Handler {
-	v := middleware[i]
-	if v == nil {
-		panic(fmt.Sprintf("Middleware of type '%v' at index %d is nil.", reflect.TypeOf(middleware[i]), i))
-	}
-	switch mw := v.(type) {
+	switch mw := middleware[i].(type) {
 	case func(interface{}) Handler:
 		return composeMiddlewareAdapter(mw)
 	case func(Handler) Handler:
@@ -68,7 +67,7 @@ func convertMiddleware(middleware []interface{}, i int) func(Handler) Handler {
 	case func(http.ResponseWriter, *http.Request):
 		return httpHandlerMiddlewareAdapter(http.HandlerFunc(mw))
 	default:
-		panic(fmt.Sprintf("Unsupported middleware type '%v' at index %d.", reflect.TypeOf(v), i))
+		panic(fmt.Sprintf("Unsupported middleware type '%v' at index %d.", reflect.TypeOf(middleware[i]), i))
 	}
 }
 
