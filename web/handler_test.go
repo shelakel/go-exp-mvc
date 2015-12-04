@@ -6,6 +6,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	web "github.com/shelakel/go-exp-mvc/web"
+	"golang.org/x/net/context"
 )
 
 var _ = Describe("ComposeMiddleware", func() {
@@ -13,7 +14,7 @@ var _ = Describe("ComposeMiddleware", func() {
 	It("should convert compatible middleware", func() {
 		i := 0
 		middleware := func(next web.Handler) web.Handler { i++; return next }
-		handlerFuncSignature := func(c web.Context, w http.ResponseWriter, r *http.Request) { i++ }
+		handlerFuncSignature := func(c context.Context, w http.ResponseWriter, r *http.Request) { i++ }
 		handlerFunc := web.HandlerFunc(handlerFuncSignature)
 		handler := web.Handler(handlerFunc)
 		httpMiddleware := func(next http.Handler) http.Handler { i++; return next }
@@ -37,7 +38,7 @@ var _ = Describe("ComposeMiddleware", func() {
 
 	It("should convert compatible handlers", func() {
 		i := 0
-		handlerFuncSignature := func(c web.Context, w http.ResponseWriter, r *http.Request) { i++ }
+		handlerFuncSignature := func(c context.Context, w http.ResponseWriter, r *http.Request) { i++ }
 		handlerFunc := web.HandlerFunc(handlerFuncSignature)
 		handler := web.Handler(handlerFunc)
 		httpHandlerFuncSignature := func(w http.ResponseWriter, r *http.Request) { i++ }

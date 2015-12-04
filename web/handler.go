@@ -8,20 +8,15 @@ import (
 	"golang.org/x/net/context"
 )
 
-// Context embeds net/context.Context
-type Context interface {
-	context.Context
-}
-
 // Handler is a http.Handler with a net/context.Context parameter.
 type Handler interface {
-	ServeHTTP(c Context, w http.ResponseWriter, r *http.Request)
+	ServeHTTP(c context.Context, w http.ResponseWriter, r *http.Request)
 }
 
 // HandlerFunc implements Handler and Middleware.
-type HandlerFunc func(c Context, w http.ResponseWriter, r *http.Request)
+type HandlerFunc func(c context.Context, w http.ResponseWriter, r *http.Request)
 
-func (f HandlerFunc) ServeHTTP(c Context, w http.ResponseWriter, r *http.Request) {
+func (f HandlerFunc) ServeHTTP(c context.Context, w http.ResponseWriter, r *http.Request) {
 	f(c, w, r)
 }
 
@@ -47,6 +42,8 @@ func ComposeMiddleware(middleware ...interface{}) func(interface{}) Handler {
 	}
 }
 
+// middleware
+
 func convertMiddleware(middleware []interface{}, i int) func(Handler) Handler {
 	switch mw := middleware[i].(type) {
 	case func(interface{}) Handler:
@@ -57,7 +54,7 @@ func convertMiddleware(middleware []interface{}, i int) func(Handler) Handler {
 		return handlerMiddlewareAdapter(mw)
 	case HandlerFunc:
 		return handlerMiddlewareAdapter(mw)
-	case func(Context, http.ResponseWriter, *http.Request):
+	case func(context.Context, http.ResponseWriter, *http.Request):
 		return handlerMiddlewareAdapter(HandlerFunc(mw))
 	case func(http.Handler) http.Handler:
 		return httpMiddlewareAdapter(mw)
@@ -72,6 +69,45 @@ func convertMiddleware(middleware []interface{}, i int) func(Handler) Handler {
 	}
 }
 
+// convert middleware adapters
+
+func composeMiddlewareAdapter(mw func(interface{}) Handler) func(Handler) Handler {
+	return func(next Handler) Handler { return mw(next) }
+}
+
+func handlerMiddlewareAdapter(mw Handler) func(Handler) Handler {
+	return func(next Handler) Handler {
+		if next == nil {
+			return mw
+		}
+		return HandlerFunc(func(c context.Context, w http.ResponseWriter, r *http.Request) {
+			mw.ServeHTTP(c, w, r)
+			next.ServeHTTP(c, w, r)
+		})
+	}
+}
+
+func httpHandlerMiddlewareAdapter(mw http.Handler) func(Handler) Handler {
+	return func(next Handler) Handler {
+		return HandlerFunc(func(c context.Context, w http.ResponseWriter, r *http.Request) {
+			mw.ServeHTTP(w, r)
+			next.ServeHTTP(c, w, r)
+		})
+	}
+}
+
+func httpMiddlewareAdapter(mw func(http.Handler) http.Handler) func(Handler) Handler {
+	return func(next Handler) Handler {
+		return HandlerFunc(func(c context.Context, w http.ResponseWriter, r *http.Request) {
+			mw(http.HandlerFunc(func(w1 http.ResponseWriter, r1 *http.Request) {
+				next.ServeHTTP(c, w1, r1)
+			})).ServeHTTP(w, r)
+		})
+	}
+}
+
+// handler
+
 func convertHandler(v interface{}) Handler {
 	if v == nil {
 		panic(fmt.Sprintf("Handler of type '%v' is nil.", reflect.TypeOf(v)))
@@ -81,7 +117,7 @@ func convertHandler(v interface{}) Handler {
 		return h
 	case HandlerFunc:
 		return h
-	case func(Context, http.ResponseWriter, *http.Request):
+	case func(context.Context, http.ResponseWriter, *http.Request):
 		return HandlerFunc(h)
 	case http.Handler:
 		return httpHandlerAdapter(h)
@@ -97,44 +133,7 @@ func convertHandler(v interface{}) Handler {
 // convert handler adapters
 
 func httpHandlerAdapter(h http.Handler) Handler {
-	return HandlerFunc(func(c Context, w http.ResponseWriter, r *http.Request) {
+	return HandlerFunc(func(c context.Context, w http.ResponseWriter, r *http.Request) {
 		h.ServeHTTP(w, r)
 	})
-}
-
-// middleware adapters
-
-func composeMiddlewareAdapter(mw func(interface{}) Handler) func(Handler) Handler {
-	return func(next Handler) Handler { return mw(next) }
-}
-
-func handlerMiddlewareAdapter(mw Handler) func(Handler) Handler {
-	return func(next Handler) Handler {
-		if next == nil {
-			return mw
-		}
-		return HandlerFunc(func(c Context, w http.ResponseWriter, r *http.Request) {
-			mw.ServeHTTP(c, w, r)
-			next.ServeHTTP(c, w, r)
-		})
-	}
-}
-
-func httpHandlerMiddlewareAdapter(mw http.Handler) func(Handler) Handler {
-	return func(next Handler) Handler {
-		return HandlerFunc(func(c Context, w http.ResponseWriter, r *http.Request) {
-			mw.ServeHTTP(w, r)
-			next.ServeHTTP(c, w, r)
-		})
-	}
-}
-
-func httpMiddlewareAdapter(mw func(http.Handler) http.Handler) func(Handler) Handler {
-	return func(next Handler) Handler {
-		return HandlerFunc(func(c Context, w http.ResponseWriter, r *http.Request) {
-			mw(http.HandlerFunc(func(w1 http.ResponseWriter, r1 *http.Request) {
-				next.ServeHTTP(c, w1, r1)
-			})).ServeHTTP(w, r)
-		})
-	}
 }
